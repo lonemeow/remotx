@@ -65,7 +65,7 @@ struct pwm_entry
 };
 
 struct pwm_entry pwm_buffer[PWM_BUFFER_SIZE];
-uint8_t pwm_overflow = 0;
+volatile uint8_t pwm_overflow = 0;
 uint16_t pwm_pulse_width[PWM_CHANNELS] = { 0 };
 uint16_t pwm_rise_times[PWM_CHANNELS] = { 0 };
 
@@ -96,7 +96,7 @@ void pwm_process(void)
 				else
 				{
 					/* Falling edge */
-					pwm_pulse_width[i] = (time - pwm_rise_times[i]) >> 1;
+					pwm_pulse_width[i] = time - pwm_rise_times[i];
 				}
 			}
 
@@ -110,12 +110,71 @@ void pwm_process(void)
 	}
 }
 
+#define CHANNELS 6
+
+uint16_t ppm_widths[CHANNELS] = { 0 };
+
+#define PPM_FRAME_LENGTH (22000U*2)
+#define PPM_PULSE_LENGTH (400*2)
+
+uint16_t ppm_buffer[(CHANNELS+1)*2];
+uint8_t ppm_position;
+
+static void ppm_update(void)
+{
+	uint16_t *ptr = ppm_buffer;
+	uint16_t frame_remaining = PPM_FRAME_LENGTH;
+
+	for (int i=0; i<CHANNELS; i++)
+	{
+		*ptr++ = PPM_PULSE_LENGTH;
+		frame_remaining -= PPM_PULSE_LENGTH;
+
+		*ptr++ = ppm_widths[i];
+		frame_remaining -= ppm_widths[i];
+	}
+
+	*ptr++ = PPM_PULSE_LENGTH;
+	frame_remaining -= PPM_PULSE_LENGTH;
+
+	*ptr++ = frame_remaining;
+}
+
+ISR(TIMER1_COMPA_vect)
+{
+	OCR1A += ppm_buffer[ppm_position++];
+
+	if (ppm_position == 14) /* XXX */
+	{
+		/* This should be safe vrt. recursion as the sync pulse at end of PPM frame
+		 * should always be long enough to let us finish. */
+		sei();
+		ppm_update();
+		ppm_position = 0;
+	}
+}
+
+void ppm_start(void)
+{
+	ppm_update();
+
+	OCR1A = TCNT1 + ppm_buffer[0];
+	ppm_position = 1;
+
+	DDRB |= _BV(PINB1); /* PB1 to output */
+
+	TIMSK1 |= _BV(OCIE1A);
+	TCCR1A |= _BV(COM1A0);
+}
+
 int main(void)
 {
 	setup_serial();
 
 	TCCR1A = 0;
 	TCCR1B = _BV(CS11); /* Clk/8 */
+
+	DDRB = _BV(PINB5); /* B5 to output */
 
 	DDRC = 0;
 	PCICR = _BV(PCIE1);
@@ -126,28 +185,17 @@ int main(void)
 
 	sei(); /* Ready to handle interrupts */
 
+	ppm_start();
+
 	while (1)
 	{
 		pwm_process();
 
-		if (!pwm_overflow)
-		{
-			serial_putstring("C1: ");
-			serial_putuint16(pwm_pulse_width[0]);
-			serial_putstring(" C2: ");
-			serial_putuint16(pwm_pulse_width[1]);
-			serial_putstring(" C3: ");
-			serial_putuint16(pwm_pulse_width[2]);
-			serial_putstring(" C4: ");
-			serial_putuint16(pwm_pulse_width[3]);
-			serial_putstring(" C5: ");
-			serial_putuint16(pwm_pulse_width[4]);
-			serial_putstring(" C6: ");
-			serial_putuint16(pwm_pulse_width[5]);
-			serial_putstring("\r\n");
-		}
-		else
-			serial_putstring("PWM overflow\r\n");
+		for (int i=0; i<CHANNELS; i++)
+			ppm_widths[i] = pwm_pulse_width[i] >> 1;
+
+		if (pwm_overflow)
+			PORTB |= _BV(PB5); /* LED indicates error */
 	}
 
 	return 0;
