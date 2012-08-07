@@ -33,6 +33,8 @@ fuse:
 clean:
 	rm -f $(TARGET) $(HEXFILE) $(OBJECTS)
 
+$(OBJECTS): globals.h
+
 $(TARGET): $(OBJECTS)
 	$(COMPILE) -o $(TARGET) $(OBJECTS)
 
