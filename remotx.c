@@ -114,7 +114,7 @@ void pwm_process(void)
 
 uint16_t ppm_widths[CHANNELS] = { 0 };
 
-#define PPM_FRAME_LENGTH (22000U*2)
+#define PPM_FRAME_LENGTH (22500U*2)
 #define PPM_PULSE_LENGTH (400*2)
 
 uint16_t ppm_buffer[(CHANNELS+1)*2];
@@ -130,8 +130,8 @@ static void ppm_update(void)
 		*ptr++ = PPM_PULSE_LENGTH;
 		frame_remaining -= PPM_PULSE_LENGTH;
 
-		*ptr++ = ppm_widths[i];
-		frame_remaining -= ppm_widths[i];
+		*ptr++ = ppm_widths[i] - PPM_PULSE_LENGTH;
+		frame_remaining -= ppm_widths[i] - PPM_PULSE_LENGTH;
 	}
 
 	*ptr++ = PPM_PULSE_LENGTH;
@@ -192,7 +192,7 @@ int main(void)
 		pwm_process();
 
 		for (int i=0; i<CHANNELS; i++)
-			ppm_widths[i] = pwm_pulse_width[i] >> 1;
+			ppm_widths[i] = pwm_pulse_width[i];
 
 		if (pwm_overflow)
 			PORTB |= _BV(PB5); /* LED indicates error */
