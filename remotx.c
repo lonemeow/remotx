@@ -1,8 +1,5 @@
-#define BAUD 9600
-
 #include <avr/io.h>
 #include <avr/interrupt.h>
-
 
 #include "globals.h"
 
@@ -10,6 +7,7 @@
 #define PINS (_BV(PC0) | _BV(PC1) | _BV(PC2) | _BV(PC3) | _BV(PC4) | _BV(PC5))
 
 /* Debug stuff starts */
+#define BAUD 115200
 #include <util/setbaud.h>
 
 void setup_serial(void)
@@ -48,9 +46,7 @@ void serial_putuint16(uint16_t v)
 	do
 	{
 		char digit = (v % 10) + '0';
-
 		tmp[i++] = digit;
-
 		v /= 10;
 	}
 	while (v);
@@ -61,43 +57,6 @@ void serial_putuint16(uint16_t v)
 
 /* Debug stuff ends */
 
-uint16_t pulse_widths[PWM_CHANNELS] = { 0 };
-uint16_t rise_times[PWM_CHANNELS] = { 0 };
-
-#if 0
-ISR(PCINT1_vect)
-{
-	uint16_t time = TCNT1;
-
-	uint8_t current_pins = PINC;
-	uint8_t changed_pins = last_pins ^ current_pins;
-	last_pins = current_pins;
-
-	uint8_t pin = _BV(PC0);
-
-	for (int i=0; i<PWM_CHANNELS; i++)
-	{
-		if (changed_pins & pin)
-		{
-			if (current_pins & pin)
-			{
-				/* Rising edge */
-				rise_times[i] = time;
-			}
-			else
-			{
-				/* Falling edge */
-				pulse_widths[i] = (time - rise_times[i]) >> 1;
-			}
-		}
-
-		pin <<= 1;
-	}
-
-	intr_time = TCNT1 - time;
-}
-#endif
-
 struct pwm_entry
 {
 	uint16_t time;
@@ -107,13 +66,47 @@ struct pwm_entry
 
 struct pwm_entry pwm_buffer[PWM_BUFFER_SIZE];
 uint8_t pwm_overflow = 0;
-uint16_t pwm_pulse_width[PWM_CHANNELS];
+uint16_t pwm_pulse_width[PWM_CHANNELS] = { 0 };
+uint16_t pwm_rise_times[PWM_CHANNELS] = { 0 };
 
 void pwm_process(void)
 {
-	while (pwm_read_pos != pwm_write_pos)
+	while (1)
 	{
+		if (pwm_read_pos == pwm_write_pos)
+			break;
+
+		static uint8_t pins = 0;
+		uint16_t time = pwm_buffer[pwm_read_pos].time;
+		uint8_t current = pwm_buffer[pwm_read_pos].pins;
+		uint8_t changed = pins ^ current;
+		pins = current;
+
+		uint8_t pin = _BV(PC0);
+
+		for (int i=0; i<PWM_CHANNELS; i++)
+		{
+			if (changed & pin)
+			{
+				if (current & pin)
+				{
+					/* Rising edge */
+					pwm_rise_times[i] = time;
+				}
+				else
+				{
+					/* Falling edge */
+					pwm_pulse_width[i] = (time - pwm_rise_times[i]) >> 1;
+				}
+			}
+
+			pin <<= 1;
+		}
+
+		/* This is not atomic, so protect it with cli/sei */
+		cli();
 		pwm_read_pos = (pwm_read_pos + 1) & PWM_BUFFER_MASK;
+		sei();
 	}
 }
 
@@ -128,41 +121,33 @@ int main(void)
 	PCICR = _BV(PCIE1);
 	PCMSK1 = _BV(PCINT8) | _BV(PCINT9) | _BV(PCINT10) | _BV(PCINT11) | _BV(PCINT12) | _BV(PCINT13);
 
+	pwm_read_pos = 0;
+	pwm_write_pos = 0;
+
 	sei(); /* Ready to handle interrupts */
-
-	serial_putstring("testink: ");
-	serial_putuint16(12765);
-	serial_putstring("\r\n");
-
-	uint16_t last = TCNT1;
 
 	while (1)
 	{
 		pwm_process();
 
-		if (TCNT1 - last > 1000)
+		if (!pwm_overflow)
 		{
-			last = TCNT1;
-
-			if (!pwm_overflow)
-			{
-				serial_putstring("C1: ");
-				serial_putuint16(pwm_pulse_width[0]);
-				serial_putstring(" C2: ");
-				serial_putuint16(pwm_pulse_width[1]);
-				serial_putstring(" C2: ");
-				serial_putuint16(pwm_pulse_width[1]);
-				serial_putstring(" C2: ");
-				serial_putuint16(pwm_pulse_width[1]);
-				serial_putstring(" C2: ");
-				serial_putuint16(pwm_pulse_width[1]);
-				serial_putstring(" C2: ");
-				serial_putuint16(pwm_pulse_width[1]);
-				serial_putstring("\r\n");
-			}
-			else
-				serial_putstring("PWM overflow\r\n");
+			serial_putstring("C1: ");
+			serial_putuint16(pwm_pulse_width[0]);
+			serial_putstring(" C2: ");
+			serial_putuint16(pwm_pulse_width[1]);
+			serial_putstring(" C3: ");
+			serial_putuint16(pwm_pulse_width[2]);
+			serial_putstring(" C4: ");
+			serial_putuint16(pwm_pulse_width[3]);
+			serial_putstring(" C5: ");
+			serial_putuint16(pwm_pulse_width[4]);
+			serial_putstring(" C6: ");
+			serial_putuint16(pwm_pulse_width[5]);
+			serial_putstring("\r\n");
 		}
+		else
+			serial_putstring("PWM overflow\r\n");
 	}
 
 	return 0;

@@ -5,7 +5,7 @@
 .extern pwm_buffer
 .extern pwm_overflow
 
-.global PCINT0_vect
+.global PCINT1_vect
 PCINT1_vect:
         in      pwm_SREG_save, _SFR_IO_ADDR(SREG)
         push    r30

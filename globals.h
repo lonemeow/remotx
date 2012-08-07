@@ -26,8 +26,8 @@ register uint8_t pwm_scratch1 asm("r3");
 register uint8_t pwm_scratch2 asm("r4");
 register uint8_t pwm_scratch3 asm("r5");
 
-register uint8_t pwm_write_pos asm("r16");
-register uint8_t pwm_read_pos asm("r17");
+volatile register uint8_t pwm_write_pos asm("r16");
+volatile register uint8_t pwm_read_pos asm("r17");
 
 #endif
 
