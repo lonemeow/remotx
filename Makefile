@@ -1,13 +1,13 @@
 DEVICE     = atmega328p
 CLOCK      = 16000000
 PROGRAMMER = -c arduino -P /dev/tty.usb*
-OBJECTS    = remotx.o
+OBJECTS    = remotx.o pwm_isr.o
 #FUSES      = -U hfuse:w:0xd9:m -U lfuse:w:0x24:m
 
 # Tune the lines below only if you know what you are doing:
 
 AVRDUDE = avrdude $(PROGRAMMER) -p $(DEVICE)
-COMPILE = avr-gcc -std=c99 -Wall -Os -DF_CPU=$(CLOCK) -mmcu=$(DEVICE)
+COMPILE = avr-gcc -std=gnu99 -Wall -Os -g -DF_CPU=$(CLOCK) -mmcu=$(DEVICE)
 
 TARGET=remotx.elf
 HEXFILE=$(TARGET:.elf=.hex)
