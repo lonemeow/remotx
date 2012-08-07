@@ -35,17 +35,17 @@ PCINT1_vect:
         andi    pwm_write_pos, PWM_BUFFER_MASK
 
         cp      pwm_read_pos, pwm_write_pos
-        breq    overflow
+        breq    2f
 
-resume:
+1:
         pop     r31
         pop     r30
         out     _SFR_IO_ADDR(SREG), pwm_SREG_save
         reti
 
-overflow:
+2:
         ldi     r30, 1
         sts     pwm_overflow, r30
-        rjmp    resume
+        rjmp    1b
 
 /* vim: set expandtab: */
