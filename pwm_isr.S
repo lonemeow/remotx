@@ -11,8 +11,8 @@ PCINT1_vect:
         push    r30
         push    r31
 
-        lds     pwm_scratch1, _SFR_IO_ADDR(TCNT1L)
-        lds     pwm_scratch2, _SFR_IO_ADDR(TCNT1H)
+        lds     pwm_scratch1, _SFR_MEM_ADDR(TCNT1L)
+        lds     pwm_scratch2, _SFR_MEM_ADDR(TCNT1H)
 
         in      pwm_scratch3, _SFR_IO_ADDR(PINC)
 
