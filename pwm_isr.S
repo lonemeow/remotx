@@ -17,14 +17,14 @@ PCINT1_vect:
         in      pwm_scratch3, _SFR_IO_ADDR(PINC)
 
         mov     r30, pwm_write_pos
-        ldi     r31, 0
 
         /* Can not overflow if BUFFER_SIZE is chosen properly */
+        /* See comment in globals.h */
         lsl     r30
         lsl     r30 /* sizeof(pin_change_entry) = 4 */
  
-        subi    r30, lo8(-(pwm_buffer)) /* There's no addi/adci */
-        sbci    r31, hi8(-(pwm_buffer))
+        /* pwm_buffer is aligned to 256 bytes */
+        ldi     r31, hi8(pwm_buffer)
  
         st      Z+, pwm_scratch1 /* Store TCNT1 */
         st      Z+, pwm_scratch2
