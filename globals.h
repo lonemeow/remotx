@@ -20,12 +20,6 @@
 
 #else
 
-/* Registers reserved for PWM interrupt handler */
-register uint8_t pwm_SREG_save asm("r2");
-register uint8_t pwm_scratch1 asm("r3");
-register uint8_t pwm_scratch2 asm("r4");
-register uint8_t pwm_scratch3 asm("r5");
-
 volatile register uint8_t pwm_write_pos asm("r16");
 volatile register uint8_t pwm_read_pos asm("r17");
 

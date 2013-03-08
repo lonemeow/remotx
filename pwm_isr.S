@@ -7,16 +7,17 @@
 
 .global PCINT1_vect
 PCINT1_vect:
-        in      pwm_SREG_save, _SFR_IO_ADDR(SREG)                       /* 1 */
-
         push    r0                                                      /* 2 */
+        in      r0, _SFR_IO_ADDR(SREG)                                  /* 1 */
+
         push    r1                                                      /* 2 */
-
-        lds     r0, _SFR_MEM_ADDR(TCNT1L)                               /* 2 */
-        lds     r1, _SFR_MEM_ADDR(TCNT1H)                               /* 2 */
-
         push    r2                                                      /* 2 */
-        in      r2, _SFR_IO_ADDR(PINC)                                  /* 1 */
+
+        lds     r1, _SFR_MEM_ADDR(TCNT1L)                               /* 2 */
+        lds     r2, _SFR_MEM_ADDR(TCNT1H)                               /* 2 */
+
+        push    r3                                                      /* 2 */
+        in      r3, _SFR_IO_ADDR(PINC)                                  /* 1 */
 
         /* Grab a "local" copy of pwm_write_pos to use after unmasking
            interrupts */
@@ -34,7 +35,7 @@ PCINT1_vect:
 
         /* Uses flags from earlier "cp" */
         breq    2f                                                      /* 1 */
-                                                                 /* total 20 */
+                                                                 /* total 22 */
 
         /* It is safe to run the following code with interrupts unmasked
            because we have already calculated the position in buffer we are
@@ -53,18 +54,19 @@ PCINT1_vect:
         push    r31
         ldi     r31, hi8(pwm_buffer)
  
-        st      Z+, pwm_scratch1 /* Store TCNT1 */
-        st      Z+, pwm_scratch2
+        st      Z+, r1 /* Store TCNT1 */
+        st      Z+, r2
 
-        st      Z+, pwm_scratch3 /* Store PINC */
+        st      Z+, r3 /* Store PINC */
 
         pop     r31
 1:
         pop     r30
+        pop     r3
         pop     r2
         pop     r1
+        out     _SFR_IO_ADDR(SREG), r0
         pop     r0
-        out     _SFR_IO_ADDR(SREG), pwm_SREG_save
         reti
 
 2:
