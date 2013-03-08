@@ -117,7 +117,9 @@ uint16_t ppm_widths[CHANNELS] = { 0 };
 #define PPM_FRAME_LENGTH (22500U*2)
 #define PPM_PULSE_LENGTH (400*2)
 
-uint16_t ppm_buffer[(CHANNELS+1)*2];
+#define PPM_BUFFER_SIZE ((CHANNELS+1)*2)
+
+uint16_t ppm_buffer[PPM_BUFFER_SIZE];
 uint8_t ppm_position;
 
 static void ppm_update(void)
@@ -144,7 +146,7 @@ ISR(TIMER1_COMPA_vect)
 {
 	OCR1A += ppm_buffer[ppm_position++];
 
-	if (ppm_position == 14) /* XXX */
+	if (ppm_position == PPM_BUFFER_SIZE)
 	{
 		/* This should be safe vrt. recursion as the sync pulse at end of PPM frame
 		 * should always be long enough to let us finish. */
