@@ -6,57 +6,6 @@
 #define PWM_CHANNELS 6
 #define PINS (_BV(PC0) | _BV(PC1) | _BV(PC2) | _BV(PC3) | _BV(PC4) | _BV(PC5))
 
-/* Debug stuff starts */
-#define BAUD 115200
-#include <util/setbaud.h>
-
-void setup_serial(void)
-{
-	UBRR0H = UBRRH_VALUE;
-	UBRR0L = UBRRL_VALUE;
-
-#if USE_2X
-	UCSR0A |= _BV(U2X0);
-#else
-	UCSR0A &= ~(_BV(U2X0));
-#endif
-
-	UCSR0C = _BV(UCSZ01) | _BV(UCSZ00); /* 8-bit data */ 
-	UCSR0B = _BV(RXEN0) | _BV(TXEN0);   /* Enable RX and TX */  
-}
-
-void serial_putchar(char c)
-{
-	loop_until_bit_is_set(UCSR0A, UDRE0);
-
-	UDR0 = c;
-}
-
-void serial_putstring(const char *s)
-{
-	while (*s)
-		serial_putchar(*s++);
-}
-
-void serial_putuint16(uint16_t v)
-{
-	char tmp[8];
-	unsigned char i = 0;
-
-	do
-	{
-		char digit = (v % 10) + '0';
-		tmp[i++] = digit;
-		v /= 10;
-	}
-	while (v);
-
-	while (i > 0)
-		serial_putchar(tmp[--i]);
-}
-
-/* Debug stuff ends */
-
 struct pwm_entry
 {
 	uint16_t time;
@@ -169,8 +118,6 @@ void ppm_start(void)
 
 int main(void)
 {
-	setup_serial();
-
 	TCCR1A = 0;
 	TCCR1B = _BV(CS11); /* Clk/8 */
 
