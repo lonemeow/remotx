@@ -12,6 +12,8 @@ struct pwm_entry
     uint8_t pad;
 };
 
+#define PWM_USEC_TO_CYCLES(x) (x*2)
+
 extern struct pwm_entry pwm_buffer[PWM_BUFFER_SIZE] __attribute__((aligned(256)));
 volatile uint8_t pwm_overflow = 0;
 uint16_t pwm_pulse_width[PWM_CHANNELS] = { 0 };
@@ -115,11 +117,8 @@ void ppm_start(void)
     TCCR1A |= _BV(COM1A0);
 }
 
-int main(void)
+void pwm_init(uint16_t *buffer)
 {
-    TCCR1A = 0;
-    TCCR1B = _BV(CS11); /* Clk/8 */
-
     DDRC = 0;
     PCICR = _BV(PCIE1);
     PCMSK1 = _BV(PCINT8) | _BV(PCINT9) | _BV(PCINT10) | _BV(PCINT11) | _BV(PCINT12) | _BV(PCINT13);
@@ -127,9 +126,20 @@ int main(void)
     pwm_read_pos = 0;
     pwm_write_pos = 0;
 
-    sei(); /* Ready to handle interrupts */
+    for (int i=0; i<CHANNELS; i++)
+        buffer[i] = PWM_USEC_TO_CYCLES(1500);
+}
+
+int main(void)
+{
+    TCCR1A = 0;
+    TCCR1B = _BV(CS11); /* Clk/8 */
+
+    pwm_init(pwm_pulse_width);
 
     ppm_start();
+
+    sei(); /* Ready to handle interrupts */
 
     while (1)
     {
