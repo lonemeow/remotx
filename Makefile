@@ -6,7 +6,7 @@ AVRDUDEOPTS = -V
 
 # Tune the lines below only if you know what you are doing:
 
-OBJECTS    = remotx.o pwm_isr.o
+OBJECTS    = remotx.o pwm_isr.o ppm_isr.o
 
 AVRDUDE = avrdude $(AVRDUDEOPTS) $(PROGRAMMER) -p $(DEVICE)
 COMPILE = avr-gcc -std=gnu99 -Wall -Os -g -DF_CPU=$(CLOCK) -mmcu=$(DEVICE)

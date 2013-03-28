@@ -3,8 +3,6 @@
 
 #include "globals.h"
 
-#define CHANNELS 7
-
 /* Clock runs at 2MHz to avoid overflowing unsigned 16bit in PPM output */
 #define USEC_TO_CYCLES(x) (x*2)
 
@@ -104,12 +102,7 @@ static void pwm_init(uint16_t *buffer)
 /* Falling/Rising edge for each channel and sync pulse */
 #define PPM_BUFFER_SIZE ((CHANNELS+1) * 2)
 
-uint16_t ppm_buffer[PPM_BUFFER_SIZE];
-
-ISR(TIMER1_COMPA_vect)
-{
-    OCR1A = ppm_buffer[ppm_position++];
-}
+extern uint16_t ppm_buffer[PPM_BUFFER_SIZE]  __attribute__((aligned(256)));
 
 static void ppm_process(uint16_t *buffer)
 {
