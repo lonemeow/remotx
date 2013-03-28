@@ -3,6 +3,17 @@
 
 #define CHANNELS 7
 
+#if F_CPU == 16000000
+/* Clock runs at 2MHz to avoid overflowing unsigned 16bit in PPM output */
+#define CLK_DIV _BV(CS11) /* Clk/8 = 2MHz */
+#define USEC_TO_CYCLES(x) (x*2)
+#else
+#error Unsupported CPU frequency
+#endif
+
+/* Our hardware has inverting buffers for PWM input */
+#define PWM_INVERTED
+
 /* This has to be a power of 2 */
 /* PWM_BUFFER_SIZE * PWM_ENTRY_SIZE has to be less than 256 */
 #define PWM_BUFFER_SIZE 8

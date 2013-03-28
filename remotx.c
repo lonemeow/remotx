@@ -3,12 +3,6 @@
 
 #include "globals.h"
 
-/* Clock runs at 2MHz to avoid overflowing unsigned 16bit in PPM output */
-#define USEC_TO_CYCLES(x) (x*2)
-
-/* Our hardware has inverting buffers for PWM input */
-#define PWM_INVERTED
-
 /* PWM input routines */
 
 struct pwm_entry
@@ -158,7 +152,7 @@ int main(void)
     uint16_t pulse_widths[CHANNELS];
 
     TCCR1A = 0;
-    TCCR1B = _BV(CS11); /* Clk/8 */
+    TCCR1B = CLK_DIV;
 
     pwm_init(pulse_widths);
 
