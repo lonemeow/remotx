@@ -105,11 +105,10 @@ static void pwm_init(uint16_t *buffer)
 #define PPM_BUFFER_SIZE ((CHANNELS+1) * 2)
 
 uint16_t ppm_buffer[PPM_BUFFER_SIZE];
-uint8_t ppm_position;
 
 ISR(TIMER1_COMPA_vect)
 {
-    OCR1A += ppm_buffer[ppm_position++];
+    OCR1A = ppm_buffer[ppm_position++];
 }
 
 static void ppm_process(uint16_t *buffer)
@@ -119,20 +118,25 @@ static void ppm_process(uint16_t *buffer)
 
     uint16_t *ptr = ppm_buffer;
     uint16_t frame_remaining = PPM_FRAME_LENGTH;
+    static uint16_t sum = 0;
 
     for (int i=0; i<CHANNELS; i++)
     {
-        *ptr++ = PPM_PULSE_LENGTH;
+        *ptr++ = sum + PPM_PULSE_LENGTH;
         frame_remaining -= PPM_PULSE_LENGTH;
+        sum += PPM_PULSE_LENGTH;
 
-        *ptr++ = buffer[i] - PPM_PULSE_LENGTH;
+        *ptr++ = sum + buffer[i] - PPM_PULSE_LENGTH;
         frame_remaining -= buffer[i] - PPM_PULSE_LENGTH;
+        sum += buffer[i] - PPM_PULSE_LENGTH;
     }
 
-    *ptr++ = PPM_PULSE_LENGTH;
+    *ptr++ = sum + PPM_PULSE_LENGTH;
     frame_remaining -= PPM_PULSE_LENGTH;
+    sum += PPM_PULSE_LENGTH;
 
-    *ptr++ = frame_remaining;
+    *ptr++ = sum + frame_remaining;
+    sum += frame_remaining;
 
     /* XXX Overflow handling XXX */
 
@@ -146,7 +150,8 @@ static void ppm_start(uint16_t *buffer)
     DDRB |= _BV(1);  /* PB1 to output */
     PORTB |= _BV(1); /* PB1 high */
 
-    OCR1A = TCNT1 + ppm_buffer[0];
+    OCR1A = ppm_buffer[0];
+    TCNT1 = 0;
     ppm_position = 1;
 
     TIMSK1 |= _BV(OCIE1A);
