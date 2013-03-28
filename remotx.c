@@ -121,8 +121,6 @@ int main(void)
 	TCCR1A = 0;
 	TCCR1B = _BV(CS11); /* Clk/8 */
 
-	DDRB = _BV(PINB5); /* B5 to output */
-
 	DDRC = 0;
 	PCICR = _BV(PCIE1);
 	PCMSK1 = _BV(PCINT8) | _BV(PCINT9) | _BV(PCINT10) | _BV(PCINT11) | _BV(PCINT12) | _BV(PCINT13);
@@ -140,9 +138,6 @@ int main(void)
 
 		for (int i=0; i<CHANNELS; i++)
 			ppm_widths[i] = pwm_pulse_width[i];
-
-		if (pwm_overflow)
-			PORTB |= _BV(PB5); /* LED indicates error */
 	}
 
 	return 0;
