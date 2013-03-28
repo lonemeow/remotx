@@ -3,7 +3,7 @@
 
 #include "globals.h"
 
-#define PWM_CHANNELS 6
+#define CHANNELS 7
 
 struct pwm_entry
 {
@@ -12,14 +12,14 @@ struct pwm_entry
     uint8_t pad;
 };
 
-#define PWM_USEC_TO_CYCLES(x) (x*2)
+#define USEC_TO_CYCLES(x) (x*2)
 
-#define PWM_PULSE_MIN_WIDTH PWM_USEC_TO_CYCLES(800)
-#define PWM_PULSE_MAX_WIDTH PWM_USEC_TO_CYCLES(2200)
+#define PWM_PULSE_MIN_WIDTH USEC_TO_CYCLES(800)
+#define PWM_PULSE_MAX_WIDTH USEC_TO_CYCLES(2200)
 
 extern struct pwm_entry pwm_buffer[PWM_BUFFER_SIZE] __attribute__((aligned(256)));
 volatile uint8_t pwm_overflow = 0;
-uint16_t pwm_rise_times[PWM_CHANNELS] = { 0 };
+uint16_t pwm_rise_times[CHANNELS] = { 0 };
 
 /* Our hardware has inverting buffers for PWM input */
 #define PWM_INVERTED
@@ -42,7 +42,7 @@ void pwm_process(uint16_t *buffer)
 
         uint8_t pin = _BV(7);
 
-        for (int i=0; i<PWM_CHANNELS; i++)
+        for (int i=0; i<CHANNELS; i++)
         {
             if (changed & pin)
             {
@@ -75,18 +75,25 @@ void pwm_process(uint16_t *buffer)
     }
 }
 
-#define CHANNELS 6
-
-uint16_t ppm_widths[CHANNELS] = { 0 };
-
 #define PPM_FRAME_LENGTH (22500U*2)
 #define PPM_PULSE_LENGTH (400*2)
 
-uint16_t ppm_buffer[(CHANNELS+1)*2];
+/* Falling/Rising edge for each channel and sync pulse */
+#define PPM_BUFFER_SIZE ((CHANNELS+1) * 2)
+
+uint16_t ppm_buffer[PPM_BUFFER_SIZE];
 uint8_t ppm_position;
 
-static void ppm_update(void)
+ISR(TIMER1_COMPA_vect)
 {
+    OCR1A += ppm_buffer[ppm_position++];
+}
+
+static void ppm_process(uint16_t *buffer)
+{
+    if (ppm_position < PPM_BUFFER_SIZE)
+        return;
+
     uint16_t *ptr = ppm_buffer;
     uint16_t frame_remaining = PPM_FRAME_LENGTH;
 
@@ -95,38 +102,29 @@ static void ppm_update(void)
         *ptr++ = PPM_PULSE_LENGTH;
         frame_remaining -= PPM_PULSE_LENGTH;
 
-        *ptr++ = ppm_widths[i] - PPM_PULSE_LENGTH;
-        frame_remaining -= ppm_widths[i] - PPM_PULSE_LENGTH;
+        *ptr++ = buffer[i] - PPM_PULSE_LENGTH;
+        frame_remaining -= buffer[i] - PPM_PULSE_LENGTH;
     }
 
     *ptr++ = PPM_PULSE_LENGTH;
     frame_remaining -= PPM_PULSE_LENGTH;
 
     *ptr++ = frame_remaining;
+
+    /* XXX Overflow handling XXX */
+
+    ppm_position = 0;
 }
 
-ISR(TIMER1_COMPA_vect)
+static void ppm_start(uint16_t *buffer)
 {
-    OCR1A += ppm_buffer[ppm_position++];
+    ppm_process(buffer);
 
-    if (ppm_position == 14) /* XXX */
-    {
-        /* This should be safe vrt. recursion as the sync pulse at end of PPM frame
-         * should always be long enough to let us finish. */
-        sei();
-        ppm_update();
-        ppm_position = 0;
-    }
-}
-
-void ppm_start(void)
-{
-    ppm_update();
+    DDRB |= _BV(1);  /* PB1 to output */
+    PORTB |= _BV(1); /* PB1 high */
 
     OCR1A = TCNT1 + ppm_buffer[0];
     ppm_position = 1;
-
-    DDRB |= _BV(PINB1); /* PB1 to output */
 
     TIMSK1 |= _BV(OCIE1A);
     TCCR1A |= _BV(COM1A0);
@@ -147,7 +145,7 @@ void pwm_init(uint16_t *buffer)
     pwm_write_pos = 0;
 
     for (int i=0; i<CHANNELS; i++)
-        buffer[i] = PWM_USEC_TO_CYCLES(1500);
+        buffer[i] = USEC_TO_CYCLES(1500);
 }
 
 int main(void)
@@ -159,16 +157,15 @@ int main(void)
 
     pwm_init(pulse_widths);
 
-    ppm_start();
-
     sei(); /* Ready to handle interrupts */
+
+    ppm_start(pulse_widths);
 
     while (1)
     {
         pwm_process(pulse_widths);
 
-        for (int i=0; i<CHANNELS; i++)
-            ppm_widths[i] = pulse_widths[i];
+        ppm_process(pulse_widths);
     }
 
     return 0;
