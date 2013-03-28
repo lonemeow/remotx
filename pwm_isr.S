@@ -12,8 +12,8 @@ pwm_buffer:
 
 .section .text
 
-.global PCINT1_vect
-PCINT1_vect:
+.global PCINT2_vect
+PCINT2_vect:
         push    r0                                                      /* 2 */
         in      r0, _SFR_IO_ADDR(SREG)                                  /* 1 */
 
@@ -23,7 +23,7 @@ PCINT1_vect:
 
         lds     r1, _SFR_MEM_ADDR(TCNT1L)                               /* 2 */
         lds     r2, _SFR_MEM_ADDR(TCNT1H)                               /* 2 */
-        in      r3, _SFR_IO_ADDR(PINC)                                  /* 1 */
+        in      r3, _SFR_IO_ADDR(PIND)                                  /* 1 */
 
         /* Grab a "local" copy of pwm_write_pos to use after unmasking
            interrupts */
@@ -63,7 +63,7 @@ PCINT1_vect:
         st      Z+, r1 /* Store TCNT1 */
         st      Z+, r2
 
-        st      Z+, r3 /* Store PINC */
+        st      Z+, r3 /* Store PIND */
 
         pop     r31
 1:

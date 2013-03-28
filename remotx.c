@@ -117,11 +117,16 @@ void ppm_start(void)
     TCCR1A |= _BV(COM1A0);
 }
 
+#define PWM_PINS (_BV(1) | _BV(2) | _BV(3) | _BV(4) | _BV(5) | _BV(6) | _BV(7))
+
 void pwm_init(uint16_t *buffer)
 {
-    DDRC = 0;
-    PCICR = _BV(PCIE1);
-    PCMSK1 = _BV(PCINT8) | _BV(PCINT9) | _BV(PCINT10) | _BV(PCINT11) | _BV(PCINT12) | _BV(PCINT13);
+    /* PD1-PD7 to input */
+    DDRD &= ~PWM_PINS;
+    /* Pin Change Interrupt 2 enable */
+    PCICR |= _BV(PCIE2);
+    /* Pin Change Interrupt 2 mask to PD1-PD7 */
+    PCMSK2 |= PWM_PINS;
 
     pwm_read_pos = 0;
     pwm_write_pos = 0;
