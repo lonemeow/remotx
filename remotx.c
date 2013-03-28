@@ -19,6 +19,15 @@ volatile uint8_t pwm_overflow = 0;
 uint16_t pwm_pulse_width[PWM_CHANNELS] = { 0 };
 uint16_t pwm_rise_times[PWM_CHANNELS] = { 0 };
 
+/* Our hardware has inverting buffers for PWM input */
+#define PWM_INVERTED
+
+#ifdef PWM_INVERTED
+#define IS_RISING_EDGE(x) (!(x))
+#else
+#define IS_RISING_EDGE(x) (x)
+#endif
+
 void pwm_process(void)
 {
     while (1)
@@ -36,16 +45,16 @@ void pwm_process(void)
 
         for (int i=0; i<PWM_CHANNELS; i++)
         {
-            if (changed & pin)
+            if (IS_RISING_EDGE(changed & pin))
             {
                 if (current & pin)
                 {
-                    /* Rising edge */
+                    /* Rising edge, store time */
                     pwm_rise_times[i] = time;
                 }
                 else
                 {
-                    /* Falling edge */
+                    /* Falling edge, calculate pulse length */
                     pwm_pulse_width[i] = time - pwm_rise_times[i];
                 }
             }
