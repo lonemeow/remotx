@@ -44,7 +44,7 @@ void pwm_process(void)
         uint8_t changed = pins ^ current;
         pins = current;
 
-        uint8_t pin = _BV(PC0);
+        uint8_t pin = _BV(7);
 
         for (int i=0; i<PWM_CHANNELS; i++)
         {
@@ -69,7 +69,7 @@ void pwm_process(void)
                 }
             }
 
-            pin <<= 1;
+            pin >>= 1;
         }
 
         /* This is not atomic, so protect it with cli/sei */
