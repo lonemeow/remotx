@@ -48,9 +48,9 @@ void pwm_process(void)
 
         for (int i=0; i<PWM_CHANNELS; i++)
         {
-            if (IS_RISING_EDGE(changed & pin))
+            if (changed & pin)
             {
-                if (current & pin)
+                if (IS_RISING_EDGE(current & pin))
                 {
                     /* Rising edge, store time */
                     pwm_rise_times[i] = time;
