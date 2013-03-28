@@ -5,6 +5,14 @@
 
 #define CHANNELS 7
 
+/* Clock runs at 2MHz to avoid overflowing unsigned 16bit in PPM output */
+#define USEC_TO_CYCLES(x) (x*2)
+
+/* Our hardware has inverting buffers for PWM input */
+#define PWM_INVERTED
+
+/* PWM input routines */
+
 struct pwm_entry
 {
     uint16_t time;
@@ -12,17 +20,12 @@ struct pwm_entry
     uint8_t pad;
 };
 
-#define USEC_TO_CYCLES(x) (x*2)
-
 #define PWM_PULSE_MIN_WIDTH USEC_TO_CYCLES(800)
 #define PWM_PULSE_MAX_WIDTH USEC_TO_CYCLES(2200)
 
 extern struct pwm_entry pwm_buffer[PWM_BUFFER_SIZE] __attribute__((aligned(256)));
 volatile uint8_t pwm_overflow = 0;
-uint16_t pwm_rise_times[CHANNELS] = { 0 };
-
-/* Our hardware has inverting buffers for PWM input */
-#define PWM_INVERTED
+static uint16_t pwm_rise_times[CHANNELS] = { 0 };
 
 #ifdef PWM_INVERTED
 #define IS_RISING_EDGE(x) (!(x))
@@ -30,7 +33,7 @@ uint16_t pwm_rise_times[CHANNELS] = { 0 };
 #define IS_RISING_EDGE(x) (x)
 #endif
 
-void pwm_process(uint16_t *buffer)
+static void pwm_process(uint16_t *buffer)
 {
     while (pwm_read_pos != pwm_write_pos)
     {
@@ -74,6 +77,26 @@ void pwm_process(uint16_t *buffer)
         sei();
     }
 }
+
+#define PWM_PINS (_BV(1) | _BV(2) | _BV(3) | _BV(4) | _BV(5) | _BV(6) | _BV(7))
+
+static void pwm_init(uint16_t *buffer)
+{
+    /* PD1-PD7 to input */
+    DDRD &= ~PWM_PINS;
+    /* Pin Change Interrupt 2 enable */
+    PCICR |= _BV(PCIE2);
+    /* Pin Change Interrupt 2 mask to PD1-PD7 */
+    PCMSK2 |= PWM_PINS;
+
+    pwm_read_pos = 0;
+    pwm_write_pos = 0;
+
+    for (int i=0; i<CHANNELS; i++)
+        buffer[i] = USEC_TO_CYCLES(1500);
+}
+
+/* PPM output routines */
 
 #define PPM_FRAME_LENGTH (22500U*2)
 #define PPM_PULSE_LENGTH (400*2)
@@ -130,23 +153,7 @@ static void ppm_start(uint16_t *buffer)
     TCCR1A |= _BV(COM1A0);
 }
 
-#define PWM_PINS (_BV(1) | _BV(2) | _BV(3) | _BV(4) | _BV(5) | _BV(6) | _BV(7))
-
-void pwm_init(uint16_t *buffer)
-{
-    /* PD1-PD7 to input */
-    DDRD &= ~PWM_PINS;
-    /* Pin Change Interrupt 2 enable */
-    PCICR |= _BV(PCIE2);
-    /* Pin Change Interrupt 2 mask to PD1-PD7 */
-    PCMSK2 |= PWM_PINS;
-
-    pwm_read_pos = 0;
-    pwm_write_pos = 0;
-
-    for (int i=0; i<CHANNELS; i++)
-        buffer[i] = USEC_TO_CYCLES(1500);
-}
+/* Program entry point */
 
 int main(void)
 {
@@ -167,8 +174,6 @@ int main(void)
 
         ppm_process(pulse_widths);
     }
-
-    return 0;
 }
 
 /* vim: set shiftwidth=4 expandtab: */
