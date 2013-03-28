@@ -19,7 +19,6 @@ struct pwm_entry
 
 extern struct pwm_entry pwm_buffer[PWM_BUFFER_SIZE] __attribute__((aligned(256)));
 volatile uint8_t pwm_overflow = 0;
-uint16_t pwm_pulse_width[PWM_CHANNELS] = { 0 };
 uint16_t pwm_rise_times[PWM_CHANNELS] = { 0 };
 
 /* Our hardware has inverting buffers for PWM input */
@@ -31,13 +30,10 @@ uint16_t pwm_rise_times[PWM_CHANNELS] = { 0 };
 #define IS_RISING_EDGE(x) (x)
 #endif
 
-void pwm_process(void)
+void pwm_process(uint16_t *buffer)
 {
-    while (1)
+    while (pwm_read_pos != pwm_write_pos)
     {
-        if (pwm_read_pos == pwm_write_pos)
-            break;
-
         static uint8_t pins = 0;
         uint16_t time = pwm_buffer[pwm_read_pos].time;
         uint8_t current = pwm_buffer[pwm_read_pos].pins;
@@ -65,7 +61,7 @@ void pwm_process(void)
                     else if (pulse_width > PWM_PULSE_MAX_WIDTH)
                         pulse_width = PWM_PULSE_MAX_WIDTH;
 
-                    pwm_pulse_width[i] = pulse_width;
+                    buffer[i] = pulse_width;
                 }
             }
 
@@ -156,10 +152,12 @@ void pwm_init(uint16_t *buffer)
 
 int main(void)
 {
+    uint16_t pulse_widths[CHANNELS];
+
     TCCR1A = 0;
     TCCR1B = _BV(CS11); /* Clk/8 */
 
-    pwm_init(pwm_pulse_width);
+    pwm_init(pulse_widths);
 
     ppm_start();
 
@@ -167,10 +165,10 @@ int main(void)
 
     while (1)
     {
-        pwm_process();
+        pwm_process(pulse_widths);
 
         for (int i=0; i<CHANNELS; i++)
-            ppm_widths[i] = pwm_pulse_width[i];
+            ppm_widths[i] = pulse_widths[i];
     }
 
     return 0;
