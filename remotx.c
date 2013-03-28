@@ -14,6 +14,9 @@ struct pwm_entry
 
 #define PWM_USEC_TO_CYCLES(x) (x*2)
 
+#define PWM_PULSE_MIN_WIDTH PWM_USEC_TO_CYCLES(800)
+#define PWM_PULSE_MAX_WIDTH PWM_USEC_TO_CYCLES(2200)
+
 extern struct pwm_entry pwm_buffer[PWM_BUFFER_SIZE] __attribute__((aligned(256)));
 volatile uint8_t pwm_overflow = 0;
 uint16_t pwm_pulse_width[PWM_CHANNELS] = { 0 };
@@ -55,7 +58,14 @@ void pwm_process(void)
                 else
                 {
                     /* Falling edge, calculate pulse length */
-                    pwm_pulse_width[i] = time - pwm_rise_times[i];
+                    uint16_t pulse_width = time - pwm_rise_times[i];
+
+                    if (pulse_width < PWM_PULSE_MIN_WIDTH)
+                        pulse_width = PWM_PULSE_MIN_WIDTH;
+                    else if (pulse_width > PWM_PULSE_MAX_WIDTH)
+                        pulse_width = PWM_PULSE_MAX_WIDTH;
+
+                    pwm_pulse_width[i] = pulse_width;
                 }
             }
 
