@@ -1,8 +1,8 @@
-DEVICE      = atmega328p
-CLOCK       = 16000000
-PROGRAMMER  = -c buspirate -P /dev/tty.usbserial*
-FUSES       = -U hfuse:w:0xdf:m -U lfuse:w:0xe7:m
-AVRDUDEOPTS = -V
+DEVICE      ?= atmega328p
+CLOCK       ?= 16000000
+PROGRAMMER  ?= -c buspirate -P /dev/tty.usbserial*
+FUSES       ?= -U hfuse:w:0xdf:m -U lfuse:w:0xe7:m
+AVRDUDEOPTS ?= -V
 
 # Tune the lines below only if you know what you are doing:
 
