@@ -13,7 +13,7 @@ struct pwm_entry
 	uint8_t pad;
 };
 
-struct pwm_entry pwm_buffer[PWM_BUFFER_SIZE] __attribute__((aligned(256)));
+extern struct pwm_entry pwm_buffer[PWM_BUFFER_SIZE] __attribute__((aligned(256)));
 volatile uint8_t pwm_overflow = 0;
 uint16_t pwm_pulse_width[PWM_CHANNELS] = { 0 };
 uint16_t pwm_rise_times[PWM_CHANNELS] = { 0 };

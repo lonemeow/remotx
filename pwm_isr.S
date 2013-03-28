@@ -2,8 +2,15 @@
 
 #include "globals.h"
 
-.extern pwm_buffer
 .extern pwm_overflow
+
+.section .bss
+.global pwm_buffer
+.balign 256
+pwm_buffer:
+.skip PWM_ENTRY_SIZE * PWM_BUFFER_SIZE
+
+.section .text
 
 .global PCINT1_vect
 PCINT1_vect:
