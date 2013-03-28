@@ -48,6 +48,7 @@ far less precision on PWM input) and has enough pins on a single PCINT group
 available.
 
 Default pin layout is as follows:
+
     PD7 - PWM input channel 1
     PD6 - PWM input channel 2
     PD5 - PWM input channel 3
@@ -78,7 +79,7 @@ state. The interrupt handler is written in a way that allows it to safely
 re-enable interrupts before it has finished storing the data to minimize
 interrupt latency.
 
-The actual processing to measure PWM pulse widths is done in pwm_process()
+The actual processing to measure PWM pulse widths is done in `pwm_process()`
 called from the main loop. It will look whether the previous PPM frame has
 finished (ie. we're in the sync pulse now) and if so, calculate new OCR1A
 values for next frame based on input pulse widths.
@@ -90,8 +91,9 @@ Not implemented yet.
 ### PPM output
 
 PPM output is done using OCR1A to automatically toggle the output pin state. A
-hand crafted interrupt routine writes the pre-calculated timer values to OCR1A.
-The values are calculated in ppm_process() called from the main loop.
+hand crafted interrupt routine (see ppm_isr.S) writes the pre-calculated timer
+values to OCR1A.  The values are calculated in `ppm_process()` called from the
+main loop.
 
 TODO
 ----
