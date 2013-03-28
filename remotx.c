@@ -3,202 +3,169 @@
 
 #include "globals.h"
 
-#define PWM_CHANNELS 6
-#define PINS (_BV(PC0) | _BV(PC1) | _BV(PC2) | _BV(PC3) | _BV(PC4) | _BV(PC5))
-
-/* Debug stuff starts */
-#define BAUD 115200
-#include <util/setbaud.h>
-
-void setup_serial(void)
-{
-	UBRR0H = UBRRH_VALUE;
-	UBRR0L = UBRRL_VALUE;
-
-#if USE_2X
-	UCSR0A |= _BV(U2X0);
-#else
-	UCSR0A &= ~(_BV(U2X0));
-#endif
-
-	UCSR0C = _BV(UCSZ01) | _BV(UCSZ00); /* 8-bit data */ 
-	UCSR0B = _BV(RXEN0) | _BV(TXEN0);   /* Enable RX and TX */  
-}
-
-void serial_putchar(char c)
-{
-	loop_until_bit_is_set(UCSR0A, UDRE0);
-
-	UDR0 = c;
-}
-
-void serial_putstring(const char *s)
-{
-	while (*s)
-		serial_putchar(*s++);
-}
-
-void serial_putuint16(uint16_t v)
-{
-	char tmp[8];
-	unsigned char i = 0;
-
-	do
-	{
-		char digit = (v % 10) + '0';
-		tmp[i++] = digit;
-		v /= 10;
-	}
-	while (v);
-
-	while (i > 0)
-		serial_putchar(tmp[--i]);
-}
-
-/* Debug stuff ends */
+/* PWM input routines */
 
 struct pwm_entry
 {
-	uint16_t time;
-	uint8_t pins;
-	uint8_t pad;
+    uint16_t time;
+    uint8_t pins;
+    uint8_t pad;
 };
 
-struct pwm_entry pwm_buffer[PWM_BUFFER_SIZE] __attribute__((aligned(256)));
+#define PWM_PULSE_MIN_WIDTH USEC_TO_CYCLES(800)
+#define PWM_PULSE_MAX_WIDTH USEC_TO_CYCLES(2200)
+
+extern struct pwm_entry pwm_buffer[PWM_BUFFER_SIZE] __attribute__((aligned(256)));
 volatile uint8_t pwm_overflow = 0;
-uint16_t pwm_pulse_width[PWM_CHANNELS] = { 0 };
-uint16_t pwm_rise_times[PWM_CHANNELS] = { 0 };
+static uint16_t pwm_rise_times[CHANNELS] = { 0 };
 
-void pwm_process(void)
+#ifdef PWM_INVERTED
+#define IS_RISING_EDGE(x) (!(x))
+#else
+#define IS_RISING_EDGE(x) (x)
+#endif
+
+static void pwm_process(uint16_t *buffer)
 {
-	while (1)
-	{
-		if (pwm_read_pos == pwm_write_pos)
-			break;
+    while (pwm_read_pos != pwm_write_pos)
+    {
+        static uint8_t pins = 0;
+        uint16_t time = pwm_buffer[pwm_read_pos].time;
+        uint8_t current = pwm_buffer[pwm_read_pos].pins;
+        uint8_t changed = pins ^ current;
+        pins = current;
 
-		static uint8_t pins = 0;
-		uint16_t time = pwm_buffer[pwm_read_pos].time;
-		uint8_t current = pwm_buffer[pwm_read_pos].pins;
-		uint8_t changed = pins ^ current;
-		pins = current;
+        uint8_t pin = _BV(7);
 
-		uint8_t pin = _BV(PC0);
+        for (int i=0; i<CHANNELS; i++)
+        {
+            if (changed & pin)
+            {
+                if (IS_RISING_EDGE(current & pin))
+                {
+                    /* Rising edge, store time */
+                    pwm_rise_times[i] = time;
+                }
+                else
+                {
+                    /* Falling edge, calculate pulse length */
+                    uint16_t pulse_width = time - pwm_rise_times[i];
 
-		for (int i=0; i<PWM_CHANNELS; i++)
-		{
-			if (changed & pin)
-			{
-				if (current & pin)
-				{
-					/* Rising edge */
-					pwm_rise_times[i] = time;
-				}
-				else
-				{
-					/* Falling edge */
-					pwm_pulse_width[i] = time - pwm_rise_times[i];
-				}
-			}
+                    if (pulse_width < PWM_PULSE_MIN_WIDTH)
+                        pulse_width = PWM_PULSE_MIN_WIDTH;
+                    else if (pulse_width > PWM_PULSE_MAX_WIDTH)
+                        pulse_width = PWM_PULSE_MAX_WIDTH;
 
-			pin <<= 1;
-		}
+                    buffer[i] = pulse_width;
+                }
+            }
 
-		/* This is not atomic, so protect it with cli/sei */
-		cli();
-		pwm_read_pos = (pwm_read_pos + 1) & PWM_BUFFER_MASK;
-		sei();
-	}
+            pin >>= 1;
+        }
+
+        /* This is not atomic, so protect it with cli/sei */
+        cli();
+        pwm_read_pos = (pwm_read_pos + 1) & PWM_BUFFER_MASK;
+        sei();
+    }
 }
 
-#define CHANNELS 6
+#define PWM_PINS (_BV(1) | _BV(2) | _BV(3) | _BV(4) | _BV(5) | _BV(6) | _BV(7))
 
-uint16_t ppm_widths[CHANNELS] = { 0 };
+static void pwm_init(uint16_t *buffer)
+{
+    /* PD1-PD7 to input */
+    DDRD &= ~PWM_PINS;
+    /* Pin Change Interrupt 2 enable */
+    PCICR |= _BV(PCIE2);
+    /* Pin Change Interrupt 2 mask to PD1-PD7 */
+    PCMSK2 |= PWM_PINS;
+
+    pwm_read_pos = 0;
+    pwm_write_pos = 0;
+
+    for (int i=0; i<CHANNELS; i++)
+        buffer[i] = USEC_TO_CYCLES(1500);
+}
+
+/* PPM output routines */
 
 #define PPM_FRAME_LENGTH (22500U*2)
 #define PPM_PULSE_LENGTH (400*2)
 
-#define PPM_BUFFER_SIZE ((CHANNELS+1)*2)
+/* Falling/Rising edge for each channel and sync pulse */
+#define PPM_BUFFER_SIZE ((CHANNELS+1) * 2)
 
-uint16_t ppm_buffer[PPM_BUFFER_SIZE];
-uint8_t ppm_position;
+extern uint16_t ppm_buffer[PPM_BUFFER_SIZE]  __attribute__((aligned(256)));
 
-static void ppm_update(void)
+static void ppm_process(uint16_t *buffer)
 {
-	uint16_t *ptr = ppm_buffer;
-	uint16_t frame_remaining = PPM_FRAME_LENGTH;
+    if (ppm_position < PPM_BUFFER_SIZE)
+        return;
 
-	for (int i=0; i<CHANNELS; i++)
-	{
-		*ptr++ = PPM_PULSE_LENGTH;
-		frame_remaining -= PPM_PULSE_LENGTH;
+    uint16_t *ptr = ppm_buffer;
+    uint16_t frame_remaining = PPM_FRAME_LENGTH;
+    static uint16_t sum = 0;
 
-		*ptr++ = ppm_widths[i] - PPM_PULSE_LENGTH;
-		frame_remaining -= ppm_widths[i] - PPM_PULSE_LENGTH;
-	}
+    for (int i=0; i<CHANNELS; i++)
+    {
+        *ptr++ = sum + PPM_PULSE_LENGTH;
+        frame_remaining -= PPM_PULSE_LENGTH;
+        sum += PPM_PULSE_LENGTH;
 
-	*ptr++ = PPM_PULSE_LENGTH;
-	frame_remaining -= PPM_PULSE_LENGTH;
+        *ptr++ = sum + buffer[i] - PPM_PULSE_LENGTH;
+        frame_remaining -= buffer[i] - PPM_PULSE_LENGTH;
+        sum += buffer[i] - PPM_PULSE_LENGTH;
+    }
 
-	*ptr++ = frame_remaining;
+    *ptr++ = sum + PPM_PULSE_LENGTH;
+    frame_remaining -= PPM_PULSE_LENGTH;
+    sum += PPM_PULSE_LENGTH;
+
+    *ptr++ = sum + frame_remaining;
+    sum += frame_remaining;
+
+    /* XXX Overflow handling XXX */
+
+    ppm_position = 0;
 }
 
-ISR(TIMER1_COMPA_vect)
+static void ppm_start(uint16_t *buffer)
 {
-	OCR1A += ppm_buffer[ppm_position++];
+    ppm_process(buffer);
 
-	if (ppm_position == PPM_BUFFER_SIZE)
-	{
-		/* This should be safe vrt. recursion as the sync pulse at end of PPM frame
-		 * should always be long enough to let us finish. */
-		sei();
-		ppm_update();
-		ppm_position = 0;
-	}
+    DDRB |= _BV(1);  /* PB1 to output */
+    PORTB |= _BV(1); /* PB1 high */
+
+    OCR1A = ppm_buffer[0];
+    TCNT1 = 0;
+    ppm_position = 1;
+
+    TIMSK1 |= _BV(OCIE1A);
+    TCCR1A |= _BV(COM1A0);
 }
 
-void ppm_start(void)
-{
-	ppm_update();
-
-	OCR1A = TCNT1 + ppm_buffer[0];
-	ppm_position = 1;
-
-	DDRB |= _BV(PINB1); /* PB1 to output */
-
-	TIMSK1 |= _BV(OCIE1A);
-	TCCR1A |= _BV(COM1A0);
-}
+/* Program entry point */
 
 int main(void)
 {
-	setup_serial();
+    uint16_t pulse_widths[CHANNELS];
 
-	TCCR1A = 0;
-	TCCR1B = _BV(CS11); /* Clk/8 */
+    TCCR1A = 0;
+    TCCR1B = CLK_DIV;
 
-	DDRB = _BV(PINB5); /* B5 to output */
+    pwm_init(pulse_widths);
 
-	DDRC = 0;
-	PCICR = _BV(PCIE1);
-	PCMSK1 = _BV(PCINT8) | _BV(PCINT9) | _BV(PCINT10) | _BV(PCINT11) | _BV(PCINT12) | _BV(PCINT13);
+    sei(); /* Ready to handle interrupts */
 
-	pwm_read_pos = 0;
-	pwm_write_pos = 0;
+    ppm_start(pulse_widths);
 
-	sei(); /* Ready to handle interrupts */
+    while (1)
+    {
+        pwm_process(pulse_widths);
 
-	ppm_start();
-
-	while (1)
-	{
-		pwm_process();
-
-		for (int i=0; i<CHANNELS; i++)
-			ppm_widths[i] = pwm_pulse_width[i];
-
-		if (pwm_overflow)
-			PORTB |= _BV(PB5); /* LED indicates error */
-	}
-
-	return 0;
+        ppm_process(pulse_widths);
+    }
 }
+
+/* vim: set shiftwidth=4 expandtab: */
