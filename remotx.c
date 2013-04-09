@@ -163,6 +163,35 @@ static void ppm_start(uint16_t *buffer)
     TCCR1A |= _BV(COM1A0);
 }
 
+/* S-Bus routines */
+
+#define BAUD 100000
+#include <util/setbaud.h>
+
+static void sbus_init(void)
+{
+    /* Set baud rate */
+    UBRR0H = UBRRH_VALUE;
+    UBRR0L = UBRRL_VALUE;
+
+#if USE_2X
+#warning USART using 2X mode
+    UCSR0A |= _BV(U2X0);
+#else
+    UCSR0A &= ~_BV(U2X0);
+#endif
+
+    /* RX interrupt enabled, receiver enabled, data size = 8 */
+    UCSR0B = _BV(RXCIE0) | _BV(RXEN0) | (3 << UCSZ00);
+
+    /* Clear errors */
+    UCSR0A  &= ~(_BV(FE0) | _BV(DOR0) | _BV(UPE0));
+}
+
+ISR(USART_RX_vect)
+{
+}
+
 /* Program entry point */
 
 int main(void)
@@ -171,6 +200,8 @@ int main(void)
 
     TCCR1A = 0;
     TCCR1B = CLK_DIV;
+
+    sbus_init();
 
     pwm_init(pulse_widths);
 
